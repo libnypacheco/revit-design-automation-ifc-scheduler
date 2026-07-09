@@ -102,6 +102,12 @@ namespace RevitToIfcScheduler.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("WorkItemId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("WorkItemReportUrl")
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("JobScheduleId");
@@ -115,10 +121,22 @@ namespace RevitToIfcScheduler.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ExportSettingsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("OnlyExportVisibleElementsInView")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("UserDefinedPsetsContent")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ViewId")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");

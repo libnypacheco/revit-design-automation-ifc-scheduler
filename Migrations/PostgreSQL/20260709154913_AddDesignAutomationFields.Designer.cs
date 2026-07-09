@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RevitToIfcScheduler.Context;
@@ -11,9 +12,11 @@ using RevitToIfcScheduler.Context;
 namespace RevitToIfcScheduler.Migrations.PostgreSQL
 {
     [DbContext(typeof(PostgreSQLRevitIfcContext))]
-    partial class PostgreSQLRevitIfcContextModelSnapshot : ModelSnapshot
+    [Migration("20260709154913_AddDesignAutomationFields")]
+    partial class AddDesignAutomationFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

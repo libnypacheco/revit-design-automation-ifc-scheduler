@@ -7,6 +7,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css'
 import {useTranslation} from "react-i18next";
 import {DefaultButton} from "office-ui-fabric-react";
 import {NewIfcSettingsModal} from "../Components/Settings/NewIfcSettingsModal";
+import {DesignAutomationPanel} from "../Components/Settings/DesignAutomationPanel";
 
 export const SettingsPage = observer(()=>{
     const { t } = useTranslation();
@@ -34,7 +35,14 @@ export const SettingsPage = observer(()=>{
                     <NewIfcSettingsModal show={showModal} setShow={setShowModal}/>
                 </section>
             </div>
-            <div style={{display: "flex", flex: 1, overflowY: "auto"}}>
+            <div style={{display: "flex", flex: 1, flexDirection: "column", overflowY: "auto"}}>
+                <section style={{borderBottom: '1px solid #ccc'}}>
+                    <header>
+                        <h2>{t("Design Automation")}</h2>
+                        <div className={"flexFiller"}/>
+                    </header>
+                    <DesignAutomationPanel/>
+                </section>
                 <section>
                     <header>
                         <h2>{t("Logs")}</h2>

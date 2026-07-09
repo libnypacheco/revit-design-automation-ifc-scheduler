@@ -18,6 +18,7 @@
 
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -91,6 +92,12 @@ namespace RevitToIfcScheduler.Models
 
         [JsonProperty("outputStorageLocation")]
         public string OutputStorageLocation { get; set; }
+
+        [JsonProperty("workItemId")]
+        public string WorkItemId { get; set; }
+
+        [JsonProperty("workItemReportUrl")]
+        public string WorkItemReportUrl { get; set; }
 
         public string EncodedFileUrn
         {
@@ -176,35 +183,22 @@ namespace RevitToIfcScheduler.Models
                     await revitIfcContext.SaveChangesAsync();
                 }
 
-                //Get Derivative URN
-                if (conversionJob.DerivativeUrn == null)
-                {
-                    conversionJob.AddLog($"Retrieving Derivative URN ...");
-                    conversionJob.DerivativeUrn = await APS.GetIfcDerivativeUrn(conversionJob.FileUrn, token, conversionJob.Region);
-
-                    conversionJob.AddLog($"Retrieved Derivative URN: {conversionJob.DerivativeUrn}");
-                    revitIfcContext.ConversionJobs.Update(conversionJob);
-                    await revitIfcContext.SaveChangesAsync();
-                }
+                //Download the Design Automation output ZIP and extract the IFC file
+                conversionJob.AddLog($"Downloading Design Automation output ...");
+                var ifcFilePath = await DesignAutomation.DownloadOutputAndExtractIfc(conversionJob, token);
+                var extension = Path.GetExtension(ifcFilePath);
+                conversionJob.AddLog($"Extracted IFC file: {Path.GetFileName(ifcFilePath)}");
 
                 //Create Storage Object
+                var targetFileName = conversionJob.FileName.Split('.').First() + extension;
                 conversionJob.AddLog($"Creating Storage Location ...");
                 var storageLocation = await APS.CreateStorageLocation(conversionJob.ProjectId, conversionJob.FolderId,
-                    conversionJob.DerivativeUrn, token);
+                    targetFileName, token);
                 conversionJob.AddLog($"Created Storage Location: {storageLocation}");
 
-                conversionJob.AddLog($"Creating Object in Storage Location ...");
-                var urn = string.IsNullOrWhiteSpace(conversionJob.EncodedInputStorageLocation)
-                                ? conversionJob.EncodedFileUrn
-                                : conversionJob.EncodedInputStorageLocation;
-
-                var objectId = await APS.PassDownloadToStorageLocation(conversionJob.DerivativeUrn,
-                    urn,
-                    storageLocation,
-                    conversionJob,
-                    token);
-
-                conversionJob.AddLog($"Created Object in Storage Location: {objectId}");
+                conversionJob.AddLog($"Uploading IFC to Storage Location ...");
+                var objectId = await APS.UploadFileToStorageLocation(storageLocation, ifcFilePath, token);
+                conversionJob.AddLog($"Uploaded IFC to Storage Location: {objectId}");
 
                 //Remove unsafe characters from the name
                 var suffix = string.Empty;
@@ -214,7 +208,7 @@ namespace RevitToIfcScheduler.Models
 
                 //Look for IFC file with same name as revit file in the same folder
                 var existingVersion = await APS.GetExistingVersion(conversionJob.ProjectId, conversionJob.FolderId,
-                    conversionJob.FileName, suffix, token);
+                    conversionJob.FileName, suffix, extension, token);
 
 
                 if (existingVersion == null)
@@ -222,7 +216,7 @@ namespace RevitToIfcScheduler.Models
                     conversionJob.AddLog($"Creating First Version of File ...");
                     //If exists, create new version https://aps.autodesk.com/en/docs/data/v2/reference/http/projects-project_id-versions-POST/
                     await APS.CreateFirstVersion(conversionJob.ProjectId, conversionJob.FolderId, objectId,
-                        conversionJob.FileName, suffix, token);
+                        conversionJob.FileName, suffix, extension, token);
                     conversionJob.AddLog($"Created First Version of File");
                 }
                 else
@@ -230,9 +224,11 @@ namespace RevitToIfcScheduler.Models
                     conversionJob.AddLog($"Found an existing file with same name. Creating Next Version of File ...");
                     //Otherwise, create item https://aps.autodesk.com/en/docs/data/v2/reference/http/projects-project_id-items-POST/
                     await APS.CreateSubsequentVersion(conversionJob.ProjectId, existingVersion.Split('?').First(), objectId,
-                        conversionJob.FileName, suffix, token);
+                        conversionJob.FileName, suffix, extension, token);
                     conversionJob.AddLog($"Created Next Version of File");
                 }
+
+                DesignAutomation.CleanupOutput(conversionJob);
 
                 //Update Status
                 conversionJob.AddLog("Conversion Succeeded");

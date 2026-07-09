@@ -76,7 +76,11 @@ namespace RevitToIfcScheduler.Controllers
                 
                 var item = new IfcSettingsSet(){
                     Name = newItem.Name,
-                    IsDefault = existingSets.Count == 0
+                    IsDefault = existingSets.Count == 0,
+                    ExportSettingsJson = newItem.ExportSettingsJson,
+                    ViewId = newItem.ViewId,
+                    OnlyExportVisibleElementsInView = newItem.OnlyExportVisibleElementsInView,
+                    UserDefinedPsetsContent = newItem.UserDefinedPsetsContent
                 };
 
                 await RevitIfcContext.IfcSettingsSets.AddAsync(item);
@@ -109,6 +113,23 @@ namespace RevitToIfcScheduler.Controllers
                 {
                     item.Name = updateItem.Name;
                 }
+
+                if (updateItem.ExportSettingsJson != null)
+                {
+                    item.ExportSettingsJson = string.IsNullOrWhiteSpace(updateItem.ExportSettingsJson) ? null : updateItem.ExportSettingsJson;
+                }
+
+                if (updateItem.ViewId != null)
+                {
+                    item.ViewId = string.IsNullOrWhiteSpace(updateItem.ViewId) ? null : updateItem.ViewId;
+                }
+
+                if (updateItem.UserDefinedPsetsContent != null)
+                {
+                    item.UserDefinedPsetsContent = string.IsNullOrWhiteSpace(updateItem.UserDefinedPsetsContent) ? null : updateItem.UserDefinedPsetsContent;
+                }
+
+                item.OnlyExportVisibleElementsInView = updateItem.OnlyExportVisibleElementsInView;
 
                 if (updateItem.IsDefault)
                 {

@@ -1,11 +1,11 @@
-﻿# Revit to IFC Scheduler
+﻿# Revit to IFC Scheduler — Design Automation Edition
 ![Platforms](https://img.shields.io/badge/platform-Windows|MacOS-lightgray.svg)
 ![.NET](https://img.shields.io/badge/.NET%20-8.0-blue.svg)
 [![License](https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg)](https://opensource.org/licenses/Apache-2.0)
 
 [![OAuth2](https://img.shields.io/badge/OAuth2-v2-green.svg)](http://aps.autodesk.com/)
 [![Data-Management](https://img.shields.io/badge/Data%20Management-v1-green.svg)](http://aps.autodesk.com/)
-[![Model-Derivative](https://img.shields.io/badge/Model%20Derivative-v1-green.svg)](https://aps.autodesk.com/en/docs/acc/v1/reference/http/locations-nodes-GET/)
+[![Design-Automation](https://img.shields.io/badge/Design%20Automation-v3-green.svg)](https://aps.autodesk.com/en/docs/design-automation/v3/developers_guide/overview/)
 [![ACC Account-Admin](https://img.shields.io/badge/ACC%20Account%20Admin-v1-green.svg)](https://aps.autodesk.com/en/docs/acc/v1/reference/http/locations-nodes-GET/)
 
 [![Advanced](https://img.shields.io/badge/Level-Advanced-red.svg)](http://aps.autodesk.com/)
@@ -13,6 +13,7 @@
 ### Contents
 
 * [Description](#description)
+* [How this differs from the original scheduler](#how-this-differs-from-the-original-scheduler)
 * [Setup](#setup)
 * [Using the Application](#using-the-application)
 * [Tips and Tricks](#tips-and-tricks)
@@ -22,13 +23,24 @@
 
 ## Description
 
-This code sample demonstrates the usage of Model Derivative API, which allows you to convert a Revit `.rvt` file stored in ACC/BIM360 Docs to `.ifc` format.
+This application converts Revit `.rvt` files stored in ACC/BIM360 Docs to `.ifc` format on demand or on a recurring schedule, using **[Design Automation for Revit](https://aps.autodesk.com/en/docs/design-automation/v3/developers_guide/overview/)** and the MIT-licensed [RevitIfcExporter appbundle](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle).
 
-The [IFC file format](https://technical.buildingsmart.org/standards/ifc/) is a common transfer format used throughout the world, and consumed by a wide range of applications. You can use this tool to automate tasks to convert Revit Files hosted in ACC/BIM360 Docs to IFC on a recurring basis.
+It is a fork of Autodesk's [aps-revit.ifc.scheduler](https://github.com/autodesk-platform-services/aps-revit.ifc.scheduler) sample, with the conversion engine swapped from the Model Derivative API to Design Automation for Revit.
 
-Users choose either folders or specific files, then choose an IFC Settings Set name, and set a schedule on which the folders or files should be converted to IFC. At the scheduled time,  the application creates [model derivative](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/) jobs for each file, and uploads the IFC file into the same folder as the original Revit file. If the Revit file and IFC Settings Set name have not changed since the last conversion, no job will be created.
+The [IFC file format](https://technical.buildingsmart.org/standards/ifc/) is a common transfer format used throughout the world, and consumed by a wide range of applications. Users choose either folders or specific files, then choose an IFC Settings Set, and set a schedule on which the folders or files should be converted to IFC. At the scheduled time, the application submits a Design Automation workitem for each file, and uploads the resulting IFC file into the same folder as the original Revit file. If the Revit file and IFC Settings Set have not changed since the last conversion, no job will be created.
 
-**Note.** [Model Derivate API](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/) incurs cost. To view the current cost of the Model Derivative service, and to purchase Cloud Credits for file conversions, please view the [APS Pricing page](https://aps.autodesk.com/pricing#cloud-credits).
+**Note.** [Design Automation API](https://aps.autodesk.com/en/docs/design-automation/v3/developers_guide/overview/) incurs cost (billed per processing time via Flex tokens/cloud credits). Please review the [APS Pricing page](https://aps.autodesk.com/pricing).
+
+## How this differs from the original scheduler
+
+The Model Derivative IFC export only accepts the *name* of an IFC export setup that must already be saved inside each published Revit model. Running the export through Design Automation for Revit removes that limitation:
+
+* **Upload your export setup JSON directly.** An IFC Settings Set can now carry the JSON exported from Revit's IFC Export dialog (`Modify Setup… > Save selected setup`). Nothing needs to be saved inside the Revit models.
+* **Export from a specific 3D view.** A settings set can specify a view UniqueId and/or the "only export elements visible in view" toggle — even if the saved setup didn't have it enabled.
+* **User-defined property sets in the cloud.** Upload the Pset definition `.txt` alongside the setup; the exporter uses it instead of the (unreachable) file path baked into the setup.
+* **Predictable exporter version.** You choose the Revit engine (2021–2026) that runs the export, instead of whatever the Model Derivative service uses.
+
+The rest of the application — ACC/BIM360 browsing, scheduling (Hangfire + cron), conversion history, email notifications, dual SQL Server/PostgreSQL support — is unchanged from the original.
 
 
 ## Thumbnail
@@ -38,6 +50,9 @@ Users choose either folders or specific files, then choose an IFC Settings Set n
 ## Limitations
 
 * This application will only work on Revit files that are uploaded directly to ACC/BIM360 Docs / Autodesk Docs, or published models from cloud worksharing.
+* The Design Automation engine version must be greater than or equal to the Revit version of the converted files (older files are upgraded in-session when opened). Files from a Revit version newer than the configured engine will fail.
+* Prebuilt appbundle ZIPs exist for Revit engines 2021–2024 and 2026. For other engines, build the appbundle from [source](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle) and point `DesignAutomation:AppBundleZipPath` at the ZIP.
+* View UniqueIds are model-specific, so the "3D View UniqueId" option of a settings set is only meaningful for settings sets dedicated to a single model.
 
 
 ## Setup
@@ -64,7 +79,7 @@ Users choose either folders or specific files, then choose an IFC Settings Set n
 Clone this project or download it. It's recommended to install [GitHub desktop](https://desktop.github.com/). To clone it via command line, use the following (**Terminal** on MacOSX/Linux, **Git Shell** on Windows):
 
 ```bash
-git clone https://github.com/autodesk-platform-services/aps-revit.ifc.scheduler.git
+git clone https://github.com/libnypacheco/revit-design-automation-ifc-scheduler.git
 ```
 
 * **Visual Studio** (Windows):
@@ -130,14 +145,17 @@ ConnectionStrings.SqlDB | Database connection string. Format depends on `Databas
 Name | Description | Default Value
 --- | --- | ---
 DatabaseProviderConfiguration.ProviderType | Which database engine to use. Supported values: `SqlServer`, `PostgreSQL`. When the entire `DatabaseProviderConfiguration` section is omitted, `SqlServer` is used. | SqlServer
+DesignAutomation.Engine | The Design Automation for Revit engine used to run IFC exports. The engine version must be >= the Revit version of the converted files. | Autodesk.Revit+2026
+DesignAutomation.AppBundleZipUrl | URL of the RevitIfcExporter appbundle ZIP to upload during provisioning. When omitted, a prebuilt ZIP matching the engine is downloaded from the [appbundle releases](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle/releases). | _null_
+DesignAutomation.AppBundleZipPath | Local file path of the appbundle ZIP, taking precedence over `AppBundleZipUrl`. Use this for engines without a prebuilt release, or for air-gapped servers. | _null_
 AppId | A name for the application, used when naming cookies and buckets | revit-to-ifc
 SendGridApiKey | If email notifications are desired, an API key from SendGrid should be provided | _null_
 FromEmail | The email address that SendGrid should attempt to put into the 'From' field | _null_
 ToEmail | The email address that SendGrid should attempt to put into the 'To' field | _null_
 LogPath | The specific path where log files should be stored | _null_
 IncludeShallowCopies | Copying a file in ACC/BIM360 does not create a new file, only a reference to the original file, and cannot be passed to the model derivative service. Setting this to true will make a true copy of the file, and pass that to the model derivative service.  | true
-TwoLegScope | The APS scopes used by two legged tokens | data:read data:create account:read
-ThreeLegScope | The APS scopes used by three legged tokens | user:read data:read
+TwoLegScope | The APS scopes used by two legged tokens (`code:all` is required for Design Automation) | account:read data:read data:create data:write bucket:read bucket:create code:all
+ThreeLegScope | The APS scopes used by three legged tokens | user:read data:read data:create
 
 ### Deployment Steps
  
@@ -153,10 +171,11 @@ Please see the [User Guide.pdf](./UserGuide.pdf) for additional details.
 1. Navigate to the tool using your browser.
 2. Log in using your ACC/BIM360 account (your email address must be included in the AdminEmails Environment Setting)
 3. Navigate to Settings by clicking `Settings` in the top right corner
-4. Toggle on the desired ACC/BIM360 accounts. 
-5. Add an IFC Settings Set Name using the `Add IFC Settings Set Name` button.
-
-    **Note.** Check out `What does an IFC Settings Set Contain?` in the [Further Reading](#further-reading) section, if you don't know what it is.
+4. Toggle on the desired ACC/BIM360 accounts.
+5. In the `Design Automation` section, press `Provision Design Automation`. This uploads the RevitIfcExporter appbundle and creates the activity under your APS application (one-time step; repeat after changing the engine).
+6. Add an IFC Settings Set using the `Add IFC Settings Set Name` button. A settings set can be either:
+   * **A name only** — the name of an IFC export setup saved inside your Revit models, or one of Revit's built-in setups (see [Further Reading](#further-reading)); or
+   * **An uploaded setup JSON** — exported from Revit's IFC Export dialog (`Modify Setup… > Save selected setup`). Optionally add a user-defined property sets `.txt`, a 3D view UniqueId, and/or the "only export elements visible in the view" toggle.
 
 #### Creating a one-off conversion to IFC
 
@@ -194,13 +213,11 @@ Please see the [User Guide.pdf](./UserGuide.pdf) for additional details.
 Name | Description
 --- | ---
 Created | The IFC conversion job is created and enqueued successfully.
-Processing | The Revit model has been sent to the Model Derivative service, and is being converted to IFC.
-Converted | The model has been converted to IFC, but has not yet been uploaded to ACC/BIM360 Docs.
-Success | The status of the IFC conversion job is success and has been uploaded to the BIM360 Docs folder where the source Revit file is.
-Failed | The conversion or upload could not be completed. Please click the conversion record for more details.
+Processing | A Design Automation workitem has been submitted, and the model is being converted to IFC.
+Success | The IFC has been generated and uploaded to the ACC/BIM360 Docs folder where the source Revit file is.
+Failed | The conversion or upload could not be completed. Click the conversion record for details — the tail of the Design Automation report is appended to the job notes.
 Unchanged | This model has previously been converted to IFC using the same IFC setting set. No additional conversion is required.
-ShallowCopy | The selected Revit file is a copy, rather than an uploaded file. To convert this file, set `AllowShallowCopies` to `true` in your [App Settings Variables](#app-settings-variables).
-TimeOut | The APS Model Derivative service has returned a [timeout error](https://aps.autodesk.com/en/docs/model-derivative/v2/reference/http/urn-manifest-GET/#body-structure-200).
+TimeOut | The Design Automation workitem exceeded the processing time limit.
 
 
 # Further Reading
@@ -209,7 +226,8 @@ Documentation:
 
 - [ACC/BIM360 API](https://aps.autodesk.com/en/docs/bim360/v1/overview/) and [App Provisioning](https://aps.autodesk.com/blog/bim-360-docs-provisioning-aps-apps)
 - [Data Management API](https://developer.autodesk.com/en/docs/data/v2/overview/)
-- [Model Derivative API](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/)
+- [Design Automation API](https://aps.autodesk.com/en/docs/design-automation/v3/developers_guide/overview/)
+- [RevitIfcExporter appbundle](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle) (the Design Automation plugin performing the IFC export)
 
 Related knowledge:
 
@@ -267,7 +285,7 @@ When this is done, an additional language code will be shown in the header bar o
 
 ###### Shallow Copies
 
-When a file is 'shallow copied', and ACC/BIM360 makes a reference to a file that's already claimed by another BIM360 file, it can't be processed via the Model Derivative service. This happens within 'Shared' folders, and when a user makes use of the 'copy' function. The `IncludeShallowCopies` optional environment setting allows us to get around this, by making a copy of the file on OSS, then translating that instead.
+When a file is 'shallow copied' (ACC/BIM360 makes a reference to a file that's already claimed by another BIM360 file — e.g. in 'Shared' folders or via the 'copy' function), the Model Derivative service refused to process it. Design Automation reads the file's storage object directly, so shallow copies are expected to convert without special handling; the `IncludeShallowCopies` setting is kept for compatibility but no longer drives the conversion path.
 
 ###### Modifying the Database
 

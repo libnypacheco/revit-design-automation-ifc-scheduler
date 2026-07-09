@@ -36,6 +36,13 @@ export class ApiCalls{
     public static deleteIfcSettings({ifcSettings}: {ifcSettings: IfcSettingsSet}){
         return SimpleDelete<void>(`/api/ifcsettings/${ifcSettings.id}`);
     }
+    //Design Automation
+    public static getDesignAutomationStatus(){
+        return SimpleGet<string>(`/api/designAutomation/status`);
+    }
+    public static postDesignAutomationProvision(){
+        return SimplePost<string>(`/api/designAutomation/provision`);
+    }
     //Logs and Debugging
     public static getLogs(){
         return SimpleGet<string[]>(`/api/logs`);

@@ -67,10 +67,13 @@ namespace RevitToIfcScheduler
             AppConfig.SendGridApiKey = Configuration.GetValue<string>("SendGridApiKey");
             AppConfig.FromEmail = Configuration.GetValue<string>("FromEmail");
             AppConfig.ToEmail = Configuration.GetValue<string>("ToEmail");
-            AppConfig.TwoLegScope = Configuration.GetValue<string>("TwoLegScope", "account:read data:read data:create data:write bucket:read bucket:create");
+            AppConfig.TwoLegScope = Configuration.GetValue<string>("TwoLegScope", "account:read data:read data:create data:write bucket:read bucket:create code:all");
             AppConfig.ThreeLegScope = Configuration.GetValue<string>("ThreeLegScope", "user:read data:read data:create");
             AppConfig.IncludeShallowCopies = Configuration.GetValue<bool>("IncludeShallowCopies", true);
             AppConfig.ApsBaseUrl = Configuration.GetValue<string>("ApsBaseUrl", "https://developer.api.autodesk.com");
+            AppConfig.DesignAutomationEngine = Configuration.GetValue<string>("DesignAutomation:Engine", "Autodesk.Revit+2026");
+            AppConfig.DesignAutomationAppBundleZipUrl = Configuration.GetValue<string>("DesignAutomation:AppBundleZipUrl");
+            AppConfig.DesignAutomationAppBundleZipPath = Configuration.GetValue<string>("DesignAutomation:AppBundleZipPath");
             AppConfig.SqlDB = Configuration.GetConnectionString("SqlDB");
             AppConfig.DataProtector = DataProtectionProvider.Create("RevitToIfc").CreateProtector("User");
             AppConfig.BucketKey = Configuration.GetValue<string>("BucketKey", $"{AppConfig.AppId}-{AppConfig.ClientId}".ToLower()).Substring(0, 35);

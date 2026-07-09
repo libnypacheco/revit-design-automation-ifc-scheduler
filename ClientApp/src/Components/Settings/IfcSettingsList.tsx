@@ -29,6 +29,19 @@ export const IfcSettingsList = observer(()=>{
                     onRender: (item: any)=>item.value === 'toggleAll' ? <b>{item.name}</b> : item.name
                 },
                 {
+                    key: "configuration",
+                    name: t("Configuration"),
+                    fieldName: "exportSettingsJson",
+                    minWidth: 140,
+                    onRender: (item: any)=>{
+                        const parts = [item.exportSettingsJson ? t("Setup JSON") : t("In-model setup name")];
+                        if (item.viewId) parts.push(t("View"));
+                        if (item.onlyExportVisibleElementsInView) parts.push(t("Visible only"));
+                        if (item.userDefinedPsetsContent) parts.push(t("Psets"));
+                        return parts.join(" + ");
+                    }
+                },
+                {
                     key: "id",
                     name: "",
                     fieldName: "id",

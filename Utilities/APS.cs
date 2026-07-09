@@ -34,8 +34,6 @@ using Serilog;
 using Autodesk.SDKManager;
 using Autodesk.DataManagement;
 using Autodesk.Oss;
-using Autodesk.ModelDerivative;
-using Autodesk.ModelDerivative.Model;
 using Autodesk.DataManagement.Model;
 using RevitToIfcScheduler.Models;
 using File = RevitToIfcScheduler.Models.File;
@@ -498,114 +496,21 @@ namespace RevitToIfcScheduler.Utilities
                     await revitIfcContext.SaveChangesAsync();
                 }
 
+                var settingsSet = await revitIfcContext.IfcSettingsSets
+                    .FirstOrDefaultAsync(x => x.Name == conversionJob.IfcSettingsSetName);
+
                 TokenGetter tokenGetter = new TwoLeggedTokenGetter();
                 var token = await tokenGetter.GetToken();
 
-                var outputFormats = new List<JobPayloadFormat>()
-                {
-                    new JobIfcOutputFormat
-                    {
-                        Advanced = new JobIfcOutputFormatAdvanced
-                        {
-                            ExportSettingName = conversionJob.IfcSettingsSetName
-                        }
-                    }
-                };
+                var workItemId = await DesignAutomation.SubmitWorkItemAsync(conversionJob, settingsSet, token);
 
-                var regionSpecifier = conversionJob.Region == "EU" ? Region.EMEA : Region.US;
+                conversionJob.WorkItemId = workItemId;
+                conversionJob.Status = ConversionJobStatus.Processing;
+                conversionJob.AddLog($"Submitted Design Automation WorkItem: {workItemId}");
 
-                // specify Job details
-                var jobPayload = new JobPayload()
-                {
-                    Input = new JobPayloadInput()
-                    {
-                        Urn = string.IsNullOrWhiteSpace(conversionJob.EncodedInputStorageLocation)
-                                ? conversionJob.EncodedFileUrn
-                                : conversionJob.EncodedInputStorageLocation,
-                        CompressedUrn = conversionJob.IsCompositeDesign,
-                        RootFilename = conversionJob.FileName
-                    },
-                    Output = new JobPayloadOutput()
-                    {
-                        Formats = outputFormats,
-                        Destination = new JobPayloadOutputDestination() { Region = regionSpecifier } //!<<< New SDK will determine the API region by this field
-                    },
-                };
+                BackgroundJob.Schedule<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id), TimeSpan.FromSeconds(30));
 
-                var inputJson = JsonConvert.SerializeObject(jobPayload, Formatting.Indented);
-                conversionJob.AddLog("Input JSON:");
-                conversionJob.AddLog(inputJson);
-                revitIfcContext.ConversionJobs.Update(conversionJob);
-                await revitIfcContext.SaveChangesAsync();
-
-                try
-                {
-                    var modelDerivativeClient = new ModelDerivativeClient(_sdkManager);
-                    var jobResponse = await modelDerivativeClient.JobsApi.StartJobAsync(jobPayload: jobPayload, accessToken: token);
-
-                    if (jobResponse.HttpResponse.IsSuccessStatusCode)
-                    {
-                        conversionJob.Status = jobResponse.HttpResponse.StatusCode == HttpStatusCode.Created
-                                   ? ConversionJobStatus.Unchanged
-                                   : ConversionJobStatus.Processing;
-
-                        if (conversionJob.Status == ConversionJobStatus.Unchanged)
-                        {
-                            conversionJob.JobFinished = DateTime.UtcNow;
-                            conversionJob.AddLog(($"This file has not changed since the last conversion to IFC. {conversionJob.Notes}").Trim());
-                        }
-
-                        BackgroundJob.Enqueue<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id));
-
-                        Log.Information($"Processing Conversion Job: {jobResponse.Content.ToString()} {conversionJob.Id}");
-                    }
-                }
-                catch (ModelDerivativeApiException ex)
-                {
-                    if (ex.StatusCode == HttpStatusCode.NotAcceptable)
-                    {
-                        var resContent = ex.HttpResponseMessage.Content;
-
-                        var errorDetail = await Autodesk.ModelDerivative.Client.LocalMarshalling.DeserializeAsync<ModelDerivativeError>(resContent);
-                        if (errorDetail.Diagnostic == "This URN is from a shallow copy, not acceptable for any other modification.")
-                        {
-                            conversionJob.AddLog("This URN is from a shallow copy, not acceptable for any other modification.");
-                            //Check settings to determine if the file should be moved to OSS, or if it should be marked as failed
-                            if (AppConfig.IncludeShallowCopies)
-                            {
-                                conversionJob.AddLog("Creating Deep Copy of file in OSS");
-
-                                //Move file to OSS
-                                conversionJob.InputStorageLocation = await MoveFileToOss(conversionJob, revitIfcContext);
-                                revitIfcContext.ConversionJobs.Update(conversionJob);
-                                await revitIfcContext.SaveChangesAsync();
-
-                                //Retry processing
-                                BackgroundJob.Enqueue(() => BeginConversionJob(conversionJobId));
-                            }
-                            else
-                            {
-                                conversionJob.Status = ConversionJobStatus.ShallowCopy;
-                            }
-                        }
-                        // else
-                        // {
-                        //     conversionJob.Status = ex.StatusCode == HttpStatusCode.Created
-                        //         ? ConversionJobStatus.Unchanged
-                        //         : ConversionJobStatus.Processing;
-
-                        //     if (conversionJob.Status == ConversionJobStatus.Unchanged)
-                        //     {
-                        //         conversionJob.JobFinished = DateTime.UtcNow;
-                        //         conversionJob.AddLog(($"This file has not changed since the last conversion to IFC. {conversionJob.Notes}").Trim());
-                        //     }
-
-                        //     BackgroundJob.Enqueue<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id));
-
-                        //     Log.Information($"Processing Conversion Job: {resContent} {conversionJob.Id}");
-                        // }
-                    }
-                }
+                Log.Information($"Processing Conversion Job: {workItemId} {conversionJob.Id}");
 
                 revitIfcContext.ConversionJobs.Update(conversionJob);
                 await revitIfcContext.SaveChangesAsync();
@@ -622,15 +527,6 @@ namespace RevitToIfcScheduler.Utilities
                 Log.Error(exception.StackTrace);
                 throw;
             }
-        }
-
-        public static async Task<Manifest> GetModelDerivativeManifest(string urn, string token, string region)
-        {
-            var regionSpecifier = (region == "EU") ? Region.EMEA : Region.US;
-            var modelDerivativeClient = new ModelDerivativeClient(_sdkManager);
-            var response = await modelDerivativeClient.GetManifestAsync(urn, region: regionSpecifier, accessToken: token);
-
-            return response;
         }
 
         /* Downloading File */
@@ -665,80 +561,11 @@ namespace RevitToIfcScheduler.Utilities
             }
         }
 
-        public static async Task<string> GetIfcDerivativeUrn(string fileUrn, string token, string region)
+        public static async Task<string> UploadFileToStorageLocation(string storageLocation, string filePath, string token)
         {
             try
             {
-                var data = await GetModelDerivativeManifest(fileUrn, token, region);
-                var ifcDDerivative = data.Derivatives.Where(derivative => derivative.OutputType == "ifc").FirstOrDefault();
-                if (ifcDDerivative != null)
-                {
-                    return ifcDDerivative.Children.First().Urn;
-                }
-
-                // foreach (var messageItem in ifcDDerivative.Messages)
-                // {
-                //     if (messageItem.code == "Revit-UnsupportedVersionOlder")
-                //     {
-                //         string exceptionMessage = "Revit Version Not Supported: ";
-                //         foreach (var messageMessage in messageItem.Message)
-                //         {
-                //             exceptionMessage += messageMessage;
-                //         }
-                //         throw new Exception(exceptionMessage);
-                //     }
-                // }
-
-                throw new Exception("IFC translation failed");
-            }
-            catch (Exception exception)
-            {
-                Log.Error($"Could not get Download URL: {exception.Message}");
-                throw new Exception("Could not get Download Url");
-            }
-        }
-
-        public static async Task<string> PassDownloadToStorageLocation(string derivativeUrn, string fileUrn, string storageLocation, ConversionJob conversionJob, string token)
-        {
-            try
-            {
-                var regionSpecifier = (conversionJob.Region == "EU") ? Region.EMEA : Region.US;
-                var results = storageLocation.Replace("urn:adsk.objects:os.object:", string.Empty).Split(new char[] { '/' });
-                if (results.Length < 2)
-                    throw new InvalidOperationException("Failed to get storage info for the source RVT file.");
-
-                var bucketKey = results[0];
-                var objectName = results[1];
-
-                var modelDerivativeClient = new ModelDerivativeClient(_sdkManager);
-                var response = await modelDerivativeClient.DerivativesApi.GetDerivativeUrlAsync(derivativeUrn, fileUrn, region: regionSpecifier, accessToken: token);
-                var cloudFrontPolicyName = "CloudFront-Policy";
-                var cloudFrontKeyPairIdName = "CloudFront-Key-Pair-Id";
-                var cloudFrontSignatureName = "CloudFront-Signature";
-
-                var cloudFrontCookies = response.HttpResponse.Headers.GetValues("Set-Cookie");
-
-                var cloudFrontPolicy = cloudFrontCookies.Where(value => value.Contains(cloudFrontPolicyName)).FirstOrDefault()?.Trim().Substring(cloudFrontPolicyName.Length + 1).Split(";").First();
-                var cloudFrontKeyPairId = cloudFrontCookies.Where(value => value.Contains(cloudFrontKeyPairIdName)).FirstOrDefault()?.Trim().Substring(cloudFrontKeyPairIdName.Length + 1).Split(";").First();
-                var cloudFrontSignature = cloudFrontCookies.Where(value => value.Contains(cloudFrontSignatureName)).FirstOrDefault()?.Trim().Substring(cloudFrontSignatureName.Length + 1).Split(";").First();
-
-                var result = response.Content;
-                var downloadUrl = result.Url.ToString();
-                var queryString = "?Key-Pair-Id=" + cloudFrontKeyPairId + "&Signature=" + cloudFrontSignature + "&Policy=" + cloudFrontPolicy;
-                downloadUrl += queryString;
-
-                string filePath = Path.Combine(_localTempFolder, objectName);
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-
-                var downloadStream = await downloadUrl
-                        .WithOAuthBearerToken(token)
-                        .GetStreamAsync(completionOption: HttpCompletionOption.ResponseHeadersRead);
-
-                using (FileStream outputFileStream = new FileStream(filePath, FileMode.Create))
-                {
-                    // downloadStream.Seek(0, SeekOrigin.Begin);
-                    downloadStream.CopyTo(outputFileStream);
-                }
+                var (bucketKey, objectName) = DesignAutomation.ParseObjectId(storageLocation);
 
                 var ossClient = new OssClient(_sdkManager);
                 var uploadResponse = await ossClient.Upload(bucketKey, objectName, filePath, token, CancellationToken.None);
@@ -747,7 +574,7 @@ namespace RevitToIfcScheduler.Utilities
 
                 if (System.IO.File.Exists(filePath))
                     System.IO.File.Delete(filePath);
-                
+
                 return uploadResponse.ObjectId;
             }
             catch (Exception exception)
@@ -760,11 +587,9 @@ namespace RevitToIfcScheduler.Utilities
 
         /* Uploading Code */
 
-        public static async Task<string> CreateStorageLocation(string projectId, string folderId, string derivativeUrn,
+        public static async Task<string> CreateStorageLocation(string projectId, string folderId, string fileName,
             string token)
         {
-            var fileName = derivativeUrn.Split('/').Last();
-
             var dataManagementClient = new DataManagementClient(_sdkManager);
             var storagePayload = new StoragePayload()
             {
@@ -798,15 +623,15 @@ namespace RevitToIfcScheduler.Utilities
         }
 
         public static async Task<string> GetExistingVersion(string projectId, string folderId, string fileName,
-            string suffix, string token)
+            string suffix, string extension, string token)
         {
             try
             {
                 var name = fileName.Split('.').First();
                 if (string.IsNullOrWhiteSpace(suffix))
-                    name = name + ".ifc";
+                    name = name + extension;
                 else
-                    name = name + suffix + ".ifc";
+                    name = name + suffix + extension;
 
                 var folderContents = await GetFolderContents(projectId, folderId, token);
 
@@ -829,15 +654,15 @@ namespace RevitToIfcScheduler.Utilities
         }
 
         public static async Task CreateFirstVersion(string projectId, string folderId, string objectId,
-            string fileName, string suffix, string token)
+            string fileName, string suffix, string extension, string token)
         {
             try
             {
                 var name = fileName.Split('.').First();
                 if (string.IsNullOrWhiteSpace(suffix))
-                    name = name + ".ifc";
+                    name = name + extension;
                 else
-                    name = name + suffix + ".ifc";
+                    name = name + suffix + extension;
 
                 var dataManagementClient = new DataManagementClient(_sdkManager);
                 var itemPayload = new ItemPayload()
@@ -921,15 +746,15 @@ namespace RevitToIfcScheduler.Utilities
 
 
         public static async Task CreateSubsequentVersion(string projectId, string itemId, string objectId,
-            string fileName, string suffix, string token)
+            string fileName, string suffix, string extension, string token)
         {
             try
             {
                 var name = fileName.Split('.').First();
                 if (string.IsNullOrWhiteSpace(suffix))
-                    name = name + ".ifc";
+                    name = name + extension;
                 else
-                    name = name + suffix + ".ifc";
+                    name = name + suffix + extension;
 
 
                 var dataManagementClient = new DataManagementClient(_sdkManager);

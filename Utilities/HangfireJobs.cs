@@ -1,4 +1,4 @@
-﻿/////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////
 // Copyright (c) Autodesk, Inc. All rights reserved
 // Written by Developer Advocacy and Support
 //
@@ -19,7 +19,6 @@
 using System;
 using System.Threading.Tasks;
 using Hangfire;
-using Newtonsoft.Json;
 using Serilog;
 using RevitToIfcScheduler.Models;
 
@@ -37,68 +36,60 @@ namespace RevitToIfcScheduler.Utilities
         {
             try
             {
-
                 var conversionJob = await _revitIfcContext.ConversionJobs.FindAsync(conversionJobId);
 
-                var token = await new TwoLeggedTokenGetter().GetToken();
-                var manifest = await APS.GetModelDerivativeManifest(conversionJob.EncodedStorageUrn, token, conversionJob.Region);
-
-                if (manifest == null)
+                if (string.IsNullOrWhiteSpace(conversionJob.WorkItemId))
                 {
-                    conversionJob.AddLog("IFC Derivative not available");
+                    conversionJob.Status = ConversionJobStatus.Failed;
+                    conversionJob.AddLog("No Design Automation WorkItem id on this job");
+                    _revitIfcContext.ConversionJobs.Update(conversionJob);
+                    await _revitIfcContext.SaveChangesAsync();
+                    return;
                 }
-                
-                switch (manifest.Status)
+
+                var token = await new TwoLeggedTokenGetter().GetToken();
+                var workItem = await DesignAutomation.GetWorkItemStatusAsync(conversionJob.WorkItemId, token);
+                var status = workItem["status"]?.ToString();
+                var reportUrl = workItem["reportUrl"]?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(reportUrl))
+                {
+                    conversionJob.WorkItemReportUrl = reportUrl;
+                }
+
+                switch (status)
                 {
                     case "pending":
-                        conversionJob.AddLog($"Processing Model Derivative: {manifest.Progress}");
-                        BackgroundJob.Schedule<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id),TimeSpan.FromMinutes(1));
-                        break;
                     case "inprogress":
-                        conversionJob.AddLog($"Processing Model Derivative: {manifest.Progress}");
-                        BackgroundJob.Schedule<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id),TimeSpan.FromMinutes(1));
-                        break;
-                    case "processing":
-                        conversionJob.AddLog($"Processing Model Derivative: {manifest.Progress}");
-                        BackgroundJob.Schedule<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id),TimeSpan.FromMinutes(1));
+                        conversionJob.AddLog($"Design Automation WorkItem: {status}");
+                        BackgroundJob.Schedule<HangfireJobs>(x => x.PollConversionJob(conversionJob.Id), TimeSpan.FromMinutes(1));
                         break;
                     case "success":
-                        //Get Derivative URN
-                        
-                        foreach (var derivative in manifest.Derivatives)
-                        {
-                            if (derivative.OutputType == "ifc")
-                            {
-                                conversionJob.DerivativeUrn = derivative.Children[0].Urn;
-                                conversionJob.AddLog($"Added Derivative URN from Manifest: {conversionJob.DerivativeUrn}");
-                            }
-                        }
-
-                        if (string.IsNullOrWhiteSpace(conversionJob.DerivativeUrn))
-                        {
-                            conversionJob.AddLog("IFC derivative Not Generated");
-                            conversionJob.Status = ConversionJobStatus.Failed;
-                            _revitIfcContext.ConversionJobs.Update(conversionJob);
-                            await _revitIfcContext.SaveChangesAsync();
-                            return;
-                        }
-
+                        conversionJob.AddLog("Design Automation WorkItem succeeded");
                         _revitIfcContext.ConversionJobs.Update(conversionJob);
                         await _revitIfcContext.SaveChangesAsync();
-                        
-                        //Create OnReceive
+
+                        //Deliver the IFC output to the ACC/BIM360 folder
                         await ConversionJob.OnReceive(conversionJob);
                         break;
-                    case "failed":
+                    case "cancelled":
                         conversionJob.Status = ConversionJobStatus.Failed;
-                        conversionJob.AddLog("Conversion Failed");
+                        conversionJob.JobFinished = DateTime.UtcNow;
+                        conversionJob.AddLog("Conversion Cancelled");
+                        await AppendWorkItemReport(conversionJob, reportUrl);
                         break;
-                    case "timeout":
+                    case "failedLimitProcessingTime":
                         conversionJob.Status = ConversionJobStatus.TimeOut;
-                        conversionJob.AddLog("Conversion Timed Out");
+                        conversionJob.JobFinished = DateTime.UtcNow;
+                        conversionJob.AddLog("Conversion Timed Out (Design Automation processing time limit)");
+                        await AppendWorkItemReport(conversionJob, reportUrl);
                         break;
-                    default: 
-                        conversionJob.AddLog(JsonConvert.SerializeObject(manifest));
+                    default:
+                        //failedDownload, failedInstructions, failedUpload, failedLimitDataSize, ...
+                        conversionJob.Status = ConversionJobStatus.Failed;
+                        conversionJob.JobFinished = DateTime.UtcNow;
+                        conversionJob.AddLog($"Conversion Failed: {status}");
+                        await AppendWorkItemReport(conversionJob, reportUrl);
                         break;
                 }
 
@@ -111,6 +102,17 @@ namespace RevitToIfcScheduler.Utilities
                 Log.Error(exception.Message);
                 Log.Error(exception.StackTrace);
                 throw;
+            }
+        }
+
+        private static async Task AppendWorkItemReport(ConversionJob conversionJob, string reportUrl)
+        {
+            if (string.IsNullOrWhiteSpace(reportUrl)) return;
+
+            var report = await DesignAutomation.GetWorkItemReportAsync(reportUrl);
+            if (!string.IsNullOrWhiteSpace(report))
+            {
+                conversionJob.AddLog($"WorkItem report (tail):\n{report}");
             }
         }
     }
