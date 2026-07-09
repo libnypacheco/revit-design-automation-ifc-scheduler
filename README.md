@@ -148,6 +148,7 @@ DatabaseProviderConfiguration.ProviderType | Which database engine to use. Suppo
 DesignAutomation.Engine | The Design Automation for Revit engine used to run IFC exports. The engine version must be >= the Revit version of the converted files. | Autodesk.Revit+2026
 DesignAutomation.AppBundleZipUrl | URL of the RevitIfcExporter appbundle ZIP to upload during provisioning. When omitted, a prebuilt ZIP matching the engine is downloaded from the [appbundle releases](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle/releases). | _null_
 DesignAutomation.AppBundleZipPath | Local file path of the appbundle ZIP, taking precedence over `AppBundleZipUrl`. Use this for engines without a prebuilt release, or for air-gapped servers. | _null_
+DesignAutomation.PublicHostUrl | Public https URL of this application (e.g. `https://myscheduler.azurewebsites.net`). **Strongly recommended**: when set, Design Automation delivers the IFC output through the app's non-expiring callback endpoint. When empty, a signed OSS URL is used, which the OSS API hard-caps at 60 minutes — exports still running ~55 minutes after submission will fail to upload. | _null_
 AppId | A name for the application, used when naming cookies and buckets | revit-to-ifc
 SendGridApiKey | If email notifications are desired, an API key from SendGrid should be provided | _null_
 FromEmail | The email address that SendGrid should attempt to put into the 'From' field | _null_
@@ -246,6 +247,25 @@ Related knowledge:
         - IFC4 Design Transfer View
 
 ### Tips and Tricks:
+
+###### Long-running exports
+
+Two separate clocks apply to a conversion:
+
+1. **Signed URL expiry (60 minutes, not extendable).** All OSS signed URLs — classic `/signed` as well as `signeds3download`/`signeds3upload` — accept `minutesExpiration` values of 1–60 only. The *input* URL is unaffected by export duration (Design Automation downloads inputs when the job starts), but the *output* URL must survive queue time + the whole export. Set `DesignAutomation:PublicHostUrl` so the output is PUT to this app's callback endpoint (`PUT /api/designAutomation/output/{jobId}`, authenticated by a per-job HMAC token) instead of a signed URL — the callback never expires.
+2. **Design Automation's own processing-time limit.** Workitems are subject to a service-side execution time limit (on the order of a few hours; see the [Design Automation rate limits & quotas](https://aps.autodesk.com/en/docs/design-automation/v3/developers_guide/rate-limits/da-rate-limits) page). Jobs exceeding it end as `failedLimitProcessingTime`, shown as `TimeOut` in the conversion history. This ceiling cannot be avoided by the callback endpoint — extremely heavy models may simply not fit in one workitem.
+
+When hosting behind IIS / Azure App Service (Windows), also raise the request body size limit for the callback endpoint, since IFC output ZIPs can exceed the 30 MB IIS default — add to `web.config`:
+
+```xml
+<system.webServer>
+  <security>
+    <requestFiltering>
+      <requestLimits maxAllowedContentLength="4294967295" />
+    </requestFiltering>
+  </security>
+</system.webServer>
+```
 
 ###### Overriding the Vite Dev Server URL
 

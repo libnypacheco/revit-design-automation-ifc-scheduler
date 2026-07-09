@@ -74,6 +74,7 @@ namespace RevitToIfcScheduler
             AppConfig.DesignAutomationEngine = Configuration.GetValue<string>("DesignAutomation:Engine", "Autodesk.Revit+2026");
             AppConfig.DesignAutomationAppBundleZipUrl = Configuration.GetValue<string>("DesignAutomation:AppBundleZipUrl");
             AppConfig.DesignAutomationAppBundleZipPath = Configuration.GetValue<string>("DesignAutomation:AppBundleZipPath");
+            AppConfig.DesignAutomationPublicHostUrl = Configuration.GetValue<string>("DesignAutomation:PublicHostUrl");
             AppConfig.SqlDB = Configuration.GetConnectionString("SqlDB");
             AppConfig.DataProtector = DataProtectionProvider.Create("RevitToIfc").CreateProtector("User");
             AppConfig.BucketKey = Configuration.GetValue<string>("BucketKey", $"{AppConfig.AppId}-{AppConfig.ClientId}".ToLower()).Substring(0, 35);

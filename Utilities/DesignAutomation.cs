@@ -21,6 +21,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Flurl.Http;
@@ -310,9 +312,22 @@ namespace RevitToIfcScheduler.Utilities
                 inputFileArgument["pathInZip"] = conversionJob.FileName;
             }
 
-            // 2. Output: the activity zips the "ifc" folder and PUTs it to this signed URL.
+            // 2. Output: the activity zips the "ifc" folder and PUTs it to this URL.
+            //    OSS signed URLs are capped at 60 minutes, counted from workitem submission,
+            //    so long-running exports would expire them. When PublicHostUrl is configured,
+            //    the output is instead PUT to this app's callback endpoint, which never expires.
             var outputObjectName = $"{conversionJob.Id}-ifc.zip";
-            var outputUrl = await CreateSignedUploadUrlAsync(AppConfig.BucketKey, outputObjectName, token);
+            string outputUrl;
+            if (!string.IsNullOrWhiteSpace(AppConfig.DesignAutomationPublicHostUrl))
+            {
+                var baseUrl = AppConfig.DesignAutomationPublicHostUrl.TrimEnd('/');
+                outputUrl = $"{baseUrl}/api/designAutomation/output/{conversionJob.Id}?token={CreateOutputToken(conversionJob.Id)}";
+            }
+            else
+            {
+                outputUrl = await CreateSignedUploadUrlAsync(AppConfig.BucketKey, outputObjectName, token);
+                conversionJob.AddLog("Using a signed output URL (60 minute validity). Exports still running ~55 minutes after submission will fail to upload. Set DesignAutomation:PublicHostUrl to remove this limit.");
+            }
             conversionJob.OutputStorageLocation = $"urn:adsk.objects:os.object:{AppConfig.BucketKey}/{outputObjectName}";
 
             // 3. Optional side files from the settings set.
@@ -451,6 +466,52 @@ namespace RevitToIfcScheduler.Utilities
             var extractPath = Path.Combine(_localTempFolder, $"{conversionJob.Id}-ifc");
             if (Directory.Exists(extractPath))
                 Directory.Delete(extractPath, true);
+        }
+
+        /* Output callback (no-expiry alternative to signed output URLs) */
+
+        public static string CreateOutputToken(Guid conversionJobId)
+        {
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(AppConfig.ClientSecret));
+            var hash = hmac.ComputeHash(conversionJobId.ToByteArray());
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        public static bool ValidateOutputToken(Guid conversionJobId, string token)
+        {
+            if (string.IsNullOrWhiteSpace(token)) return false;
+            var expected = Encoding.UTF8.GetBytes(CreateOutputToken(conversionJobId));
+            var provided = Encoding.UTF8.GetBytes(token.ToLowerInvariant());
+            return CryptographicOperations.FixedTimeEquals(expected, provided);
+        }
+
+        /// <summary>
+        /// Receives the output ZIP that Design Automation PUTs to the callback
+        /// endpoint and stores it as the job's output object in the transient
+        /// bucket, where the poller picks it up on workitem success.
+        /// </summary>
+        public static async Task ReceiveOutputAsync(Guid conversionJobId, Stream body)
+        {
+            var outputObjectName = $"{conversionJobId}-ifc.zip";
+            Directory.CreateDirectory(_localTempFolder);
+            var tempPath = Path.Combine(_localTempFolder, $"{conversionJobId}-callback.zip");
+
+            await using (var file = new FileStream(tempPath, FileMode.Create))
+            {
+                await body.CopyToAsync(file);
+            }
+
+            try
+            {
+                var token = await new TwoLeggedTokenGetter().GetToken();
+                var ossClient = new OssClient(_sdkManager);
+                await ossClient.Upload(AppConfig.BucketKey, outputObjectName, tempPath, token, CancellationToken.None);
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tempPath))
+                    System.IO.File.Delete(tempPath);
+            }
         }
 
         /* Helpers */

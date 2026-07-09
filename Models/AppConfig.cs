@@ -47,5 +47,6 @@ namespace RevitToIfcScheduler.Models
         public static string DesignAutomationEngine { get; set; }
         public static string DesignAutomationAppBundleZipUrl { get; set; }
         public static string DesignAutomationAppBundleZipPath { get; set; }
+        public static string DesignAutomationPublicHostUrl { get; set; }
     }
 }
