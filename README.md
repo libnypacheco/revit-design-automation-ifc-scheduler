@@ -1,2 +1,313 @@
-# revit-design-automation-ifc-scheduler
-Scheduler to Export IFC files from Revit files published in ACC. Options to choose specific 3D views and IFC Settings Set.
+﻿# Revit to IFC Scheduler
+![Platforms](https://img.shields.io/badge/platform-Windows|MacOS-lightgray.svg)
+![.NET](https://img.shields.io/badge/.NET%20-8.0-blue.svg)
+[![License](https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg)](https://opensource.org/licenses/Apache-2.0)
+
+[![OAuth2](https://img.shields.io/badge/OAuth2-v2-green.svg)](http://aps.autodesk.com/)
+[![Data-Management](https://img.shields.io/badge/Data%20Management-v1-green.svg)](http://aps.autodesk.com/)
+[![Model-Derivative](https://img.shields.io/badge/Model%20Derivative-v1-green.svg)](https://aps.autodesk.com/en/docs/acc/v1/reference/http/locations-nodes-GET/)
+[![ACC Account-Admin](https://img.shields.io/badge/ACC%20Account%20Admin-v1-green.svg)](https://aps.autodesk.com/en/docs/acc/v1/reference/http/locations-nodes-GET/)
+
+[![Advanced](https://img.shields.io/badge/Level-Advanced-red.svg)](http://aps.autodesk.com/)
+
+### Contents
+
+* [Description](#description)
+* [Setup](#setup)
+* [Using the Application](#using-the-application)
+* [Tips and Tricks](#tips-and-tricks)
+* [License](#license)
+
+
+
+## Description
+
+This code sample demonstrates the usage of Model Derivative API, which allows you to convert a Revit `.rvt` file stored in ACC/BIM360 Docs to `.ifc` format.
+
+The [IFC file format](https://technical.buildingsmart.org/standards/ifc/) is a common transfer format used throughout the world, and consumed by a wide range of applications. You can use this tool to automate tasks to convert Revit Files hosted in ACC/BIM360 Docs to IFC on a recurring basis.
+
+Users choose either folders or specific files, then choose an IFC Settings Set name, and set a schedule on which the folders or files should be converted to IFC. At the scheduled time,  the application creates [model derivative](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/) jobs for each file, and uploads the IFC file into the same folder as the original Revit file. If the Revit file and IFC Settings Set name have not changed since the last conversion, no job will be created.
+
+**Note.** [Model Derivate API](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/) incurs cost. To view the current cost of the Model Derivative service, and to purchase Cloud Credits for file conversions, please view the [APS Pricing page](https://aps.autodesk.com/pricing#cloud-credits).
+
+
+## Thumbnail
+
+![Main Page](.readme/Main%20Page.png "Main Page")
+
+## Limitations
+
+* This application will only work on Revit files that are uploaded directly to ACC/BIM360 Docs / Autodesk Docs, or published models from cloud worksharing.
+
+
+## Setup
+
+### Prerequisites
+
+* [Visual Studio](https://code.visualstudio.com/): Either Community 2019+ (Windows) or Code (Windows, MacOS).
+* [.NET 8.0](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+* [NodeJS (with NPM)](https://nodejs.org/en/download/)
+* A supported database engine — either SQL Server or PostgreSQL:
+  * [SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) (default)
+    * For installing SQL Server on `Windows` machines, please see [Microsoft's SQL Server installation guide](https://docs.microsoft.com/en-us/sql/database-engine/install-windows/install-sql-server?view=sql-server-ver15)
+    * For installing SQL Server on `Linux` machines, please see [Microsoft's Installation Guidance for SQL Server](https://docs.microsoft.com/en-us/sql/linux/sql-server-linux-setup?view=sql-server-ver15)
+    * For `Cloud-hosted` SQL, options include:
+      * [Azure SQL](https://azure.microsoft.com/en-us/products/azure-sql/)
+      * [Amazon RDS for SQL Server](https://aws.amazon.com/rds/sqlserver/)
+  * [PostgreSQL](https://www.postgresql.org/download/) (16 or newer recommended)
+    * For `Cloud-hosted` PostgreSQL, options include [Azure Database for PostgreSQL](https://azure.microsoft.com/en-us/products/postgresql/) and [Amazon RDS for PostgreSQL](https://aws.amazon.com/rds/postgresql/).
+* Basic knowledge of C#
+* Autodesk APS App provisioned to your ACC/BIM360 account
+
+### Running locally
+
+Clone this project or download it. It's recommended to install [GitHub desktop](https://desktop.github.com/). To clone it via command line, use the following (**Terminal** on MacOSX/Linux, **Git Shell** on Windows):
+
+```bash
+git clone https://github.com/autodesk-platform-services/aps-revit.ifc.scheduler.git
+```
+
+* **Visual Studio** (Windows):
+
+    Open the project [RevitToIfcScheduler.csproj](RevitToIfcScheduler.csproj), find [appsettings.template.json](appsettings.template.json) in the solution window, copy and rename it to `appsettings.Development.json`.
+
+![Visual Studio](.readme/visualStudioSettings.png "Visual Studio")
+
+* **Visual Studio Code** (Windows, MacOS):
+
+    Open the folder, at the bottom-right, select **Yes** and **Restore**. This restores the packages (e.g. Autodesk.SdkManager, Autodesk.Authentication, Autodesk.DataManagement, Autodesk.ModelDerivative, Autodesk.Oss, etc.) and creates the launch.json file.
+
+    Afterward, find [appsettings.template.json](appsettings.template.json) in the explore window, copy and rename it to `appsettings.Development.json`.
+
+![Visual Studio Code](.readme/VSCode.png "Visual Studio Code")
+
+Edit the `appsettings.Development.json` file, adding your APS Client ID, Secret, emails for Application Admins, and your database connection string.
+
+For SQL Server (default):
+
+```json
+{
+  "ClientId": "your id here",
+  "ClientSecret": "your secret here",
+  "AdminEmails": "your admin user emails here",
+  "ConnectionStrings": {
+    "SqlDB": "Server=localhost;Database=RevitIFCScheduler;User=sa;Password=...;TrustServerCertificate=True;"
+  }
+}
+```
+
+For PostgreSQL, set the `DatabaseProviderConfiguration.ProviderType` to `PostgreSQL` and supply a Npgsql-format connection string:
+
+```json
+{
+  "ClientId": "your id here",
+  "ClientSecret": "your secret here",
+  "AdminEmails": "your admin user emails here",
+  "ConnectionStrings": {
+    "SqlDB": "Host=localhost;Database=RevitIFCScheduler;Username=postgres;Password=..."
+  },
+  "DatabaseProviderConfiguration": {
+    "ProviderType": "PostgreSQL"
+  }
+}
+```
+
+When the `DatabaseProviderConfiguration` section is omitted, the application defaults to `SqlServer`. Both Entity Framework Core (application schema) and Hangfire (job storage) honor the selected provider. On startup, the appropriate migration set is applied automatically — SQL Server migrations live in `Migrations/` and PostgreSQL migrations in `Migrations/PostgreSQL/`.
+
+Run the app. Open `http://localhost:3000` in your browser to view the application.
+
+### App Settings Variables
+
+Name | Description | Example Value
+--- | --- | ---
+ClientId | From the APS App created during Setup | _CL35ag54e6aghsaf4cacwe_
+ClientSecret | From the APS App created during Setup | _aa46asffaws_
+AdminEmails | Semicolon-separated list of email addresses | _admin@mycompany.com;bimmanager@mycompany.com_
+ConnectionStrings.SqlDB | Database connection string. Format depends on `DatabaseProviderConfiguration.ProviderType`. |  _SQL Server:_ `Server=MY-SERVER;Database=revit-to-ifc-scheduler;Trusted_Connection=True;ConnectRetryCount=0` &#124;&#124; _PostgreSQL:_ `Host=MY-SERVER;Database=revit-to-ifc-scheduler;Username=postgres;Password=...`
+
+#### Optional App Settings
+
+Name | Description | Default Value
+--- | --- | ---
+DatabaseProviderConfiguration.ProviderType | Which database engine to use. Supported values: `SqlServer`, `PostgreSQL`. When the entire `DatabaseProviderConfiguration` section is omitted, `SqlServer` is used. | SqlServer
+AppId | A name for the application, used when naming cookies and buckets | revit-to-ifc
+SendGridApiKey | If email notifications are desired, an API key from SendGrid should be provided | _null_
+FromEmail | The email address that SendGrid should attempt to put into the 'From' field | _null_
+ToEmail | The email address that SendGrid should attempt to put into the 'To' field | _null_
+LogPath | The specific path where log files should be stored | _null_
+IncludeShallowCopies | Copying a file in ACC/BIM360 does not create a new file, only a reference to the original file, and cannot be passed to the model derivative service. Setting this to true will make a true copy of the file, and pass that to the model derivative service.  | true
+TwoLegScope | The APS scopes used by two legged tokens | data:read data:create account:read
+ThreeLegScope | The APS scopes used by three legged tokens | user:read data:read
+
+### Deployment Steps
+ 
+Please see the [Deployment Guide](./DEPLOYMENT.md).
+
+
+## Using the Application
+
+Please see the [User Guide.pdf](./UserGuide.pdf) for additional details.
+
+#### Initial Setup
+
+1. Navigate to the tool using your browser.
+2. Log in using your ACC/BIM360 account (your email address must be included in the AdminEmails Environment Setting)
+3. Navigate to Settings by clicking `Settings` in the top right corner
+4. Toggle on the desired ACC/BIM360 accounts. 
+5. Add an IFC Settings Set Name using the `Add IFC Settings Set Name` button.
+
+    **Note.** Check out `What does an IFC Settings Set Contain?` in the [Further Reading](#further-reading) section, if you don't know what it is.
+
+#### Creating a one-off conversion to IFC
+
+1. Navigate to the tool using your browser.
+2. Log in using your ACC/BIM360 account.
+3. Choose a project on the left-hand side.
+4. Navigate through the folder tree until you see the desired folders or files.
+5. Select the checkboxes next to the desired folders or files.
+6. Press `Convert Selected to IFC Now` in the upper right-hand corner.
+7. Choose the desired IFC Settings Set Name, or type in a new name.
+8. The conversion will begin immediately, but may take several minutes to complete.
+9. To view the status of the conversion, press the `Conversion History` button to see all past conversions within this project.
+
+#### Creating a scheduled conversion to IFC
+
+1. Navigate to the tool using your browser.
+2. Log in using your ACC/BIM360 account.
+3. Choose a project on the left-hand side.
+4. Navigate through the folder tree until you see the desired folders or files.
+5. Select the checkboxes next to the desired folders or files.
+6. Press `Create Schedule Conversion` in the upper right-hand corner.
+7. The application will automatically create a scheduled run on a daily schedule.
+8. You may change the following settings for the schedule: 
+   1. Schedule Name
+   2. IFC Settings Set Name
+   3. Frequency (Daily, Weekly, etc.)
+   4. The days on which the schedule should repeat
+   5. The time at which the schedule should repeat
+   6. The time zone at which the schedule should repeat
+9. The conversion will begin at the next scheduled event.
+10. To view the status of the conversion, press the `Conversion History` button to see all past conversions within this project.
+
+#### Conversion Statuses
+
+Name | Description
+--- | ---
+Created | The IFC conversion job is created and enqueued successfully.
+Processing | The Revit model has been sent to the Model Derivative service, and is being converted to IFC.
+Converted | The model has been converted to IFC, but has not yet been uploaded to ACC/BIM360 Docs.
+Success | The status of the IFC conversion job is success and has been uploaded to the BIM360 Docs folder where the source Revit file is.
+Failed | The conversion or upload could not be completed. Please click the conversion record for more details.
+Unchanged | This model has previously been converted to IFC using the same IFC setting set. No additional conversion is required.
+ShallowCopy | The selected Revit file is a copy, rather than an uploaded file. To convert this file, set `AllowShallowCopies` to `true` in your [App Settings Variables](#app-settings-variables).
+TimeOut | The APS Model Derivative service has returned a [timeout error](https://aps.autodesk.com/en/docs/model-derivative/v2/reference/http/urn-manifest-GET/#body-structure-200).
+
+
+# Further Reading
+
+Documentation:
+
+- [ACC/BIM360 API](https://aps.autodesk.com/en/docs/bim360/v1/overview/) and [App Provisioning](https://aps.autodesk.com/blog/bim-360-docs-provisioning-aps-apps)
+- [Data Management API](https://developer.autodesk.com/en/docs/data/v2/overview/)
+- [Model Derivative API](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/)
+
+Related knowledge:
+
+- [What is IFC?](https://bimconnect.org/en/software/what-is-ifc/)
+- [About Revit and IFC](https://knowledge.autodesk.com/support/revit/learn-explore/caas/CloudHelp/cloudhelp/2022/ENU/Revit-DocumentPresent/files/GUID-6708CFD6-0AD7-461F-ADE8-6527423EC895-htm.html)
+- [What does an IFC Settings Set Contain?](https://knowledge.autodesk.com/support/revit/learn-explore/caas/CloudHelp/cloudhelp/2022/ENU/Revit-DocumentPresent/files/GUID-E029E3AD-1639-4446-A935-C9796BC34C95-htm.html)
+    - The name list of Revit built-in IFC export settings (since Revit 2017) of APS Model Derivative service:
+        - IFC2x3 Coordination View 2.0
+        - IFC2x3 Coordination View
+        - IFC2x3 GSA Concept Design BIM 2010
+        - IFC2x3 Basic FM Handover View
+        - IFC2x2 Coordination View
+        - IFC2x2 Singapore BCA e-Plan Check
+        - IFC2x3 Extended FM Handover View
+        - IFC4 Reference View
+        - IFC4 Design Transfer View
+
+### Tips and Tricks:
+
+###### Overriding the Vite Dev Server URL
+
+By default, the Vite development server runs on `http://localhost:5173`. If port `5173` is already in use, or you want to use a different port, you need to update **two places**:
+
+1. **`ClientApp/vite.config.js`** — change the `server.port` value:
+
+    ```js
+    server: {
+      port: 5174,   // ← your preferred port
+    },
+    ```
+
+2. **`Startup.cs`** — pass the matching URL to `ViteServerMiddleware.EnsureStarted` via the optional `viteServerUrl` parameter:
+
+    ```csharp
+    viteUrl = Utilities.ViteServerMiddleware.EnsureStarted(
+        env.ContentRootPath,
+        lifetime.ApplicationStopping,
+        viteServerUrl: "http://localhost:5174"   // ← must match vite.config.js
+    );
+    ```
+
+`EnsureStarted` returns the URL it used, which is then passed directly to `UseProxyToSpaDevelopmentServer`, so only one string needs to change on the .NET side. If Vite is already listening on the specified URL when the .NET app starts (e.g. you ran `npm start` manually beforehand), startup detection is skipped and the existing server is used.
+
+###### Sending Confirmation Emails
+
+This tool uses SendGrid to send a confirmation email on a successful conversion. This requires creating a free SendGrid account (for up to 25,000 emails/month), verifying a 'Single Sender' email address, and retrieving an API Key with 'Send' authorization. Three optional environment settings must be set: `SendGridApiKey`, `FromEmail`, and `ToEmail`. If any one of these is left blank, no emails will be sent. 
+
+SendGrid can be setup by creating an account at [www.sendgrid.com](https://www.sendgrid.com), or by creating a `SendGrid Accounts` resource from the [Azure Portal](https://portal.azure.com/#create/Sendgrid.sendgrid).
+
+###### Internationalization - Additional Language Support
+
+This application is capable of supporting multiple languages -- by default, English and Norwegian have been provided. To add additional languages, copy the folder located at `aps-revit.ifc.scheduler/ClientApp/public/locales/en`, and rename it with the appropriate language code. Search for the file named `i18next.ts`, and add the language code to the `fallbackLng` array. Finally, edit the `translation.json` and `scheduler.json` files in the folder that you just copied, and set the values on the right hand side to the appropriate translation.
+
+When this is done, an additional language code will be shown in the header bar of the application.
+
+###### Shallow Copies
+
+When a file is 'shallow copied', and ACC/BIM360 makes a reference to a file that's already claimed by another BIM360 file, it can't be processed via the Model Derivative service. This happens within 'Shared' folders, and when a user makes use of the 'copy' function. The `IncludeShallowCopies` optional environment setting allows us to get around this, by making a copy of the file on OSS, then translating that instead.
+
+###### Modifying the Database
+
+This tool uses Entity Framework Core in a code-first, migration based setup. Provide it with a connection  string, and it will automatically create or update the database and tables as needed.
+
+When the tables are modified in the Data project, you will need to create a new Migration. Do do this, navigate to the 'BIM360 - Revit to IFC Converter' project, and run the following command: `dotnet ef migrations add NameOfYourMigrationHere`. The migration will be applied during the next application run.
+
+When adding a migration, both the SQL Server and PostgreSQL migration sets must be regenerated so both providers stay in sync:
+
+```bash
+# SQL Server migration (default context, output to root Migrations/)
+dotnet ef migrations add NameOfYourMigrationHere
+
+# PostgreSQL migration (design-time-only context, output to Migrations/PostgreSQL/)
+dotnet ef migrations add NameOfYourMigrationHere --context PostgreSQLRevitIfcContext --output-dir Migrations/PostgreSQL
+```
+
+###### Hangfire 1.8 upgrade
+
+To enable the PostgreSQL storage provider, the Hangfire packages (`Hangfire.Core`, `Hangfire.SqlServer`, `Hangfire.AspNetCore`) were upgraded from `1.7.28` to `1.8.14`. `Microsoft.EntityFrameworkCore*` was bumped from `8.0.4` to `8.0.11` to match the transitive minimum of `Npgsql.EntityFrameworkCore.PostgreSQL 8.0.11`.
+
+### Troubleshooting
+
+1. **Cannot see my ACC/BIM360 projects**:
+    * Make sure to provision the APS App Client ID within the ACC/BIM360 Account, [learn more here](https://aps.autodesk.com/blog/bim-360-docs-provisioning-aps-apps). (This requires the Account Admin permission)
+    * Also, check **section 2.1 Login** and **section 2.3.1 Enabling a BIM360 account** of [UserGuide.pdf](UserGuide.pdf) for instructions.
+
+2. **Received Microsoft.Data.SqlClient.SqlException while starting this app**: if it indicates that `there is already an object named 'XXXXX' in the database`, then this means the database you specified in `appsetings.json` is not empty. You can fix it by doing either of the below ways:
+    * Comment out the `dbContext.Database.Migrate();` in [Startup.cs](Startup.cs), then restart the app.
+    * Backup your database, erase the database by executing `DROP DATABASE` command in the [SQL Server Management Studio](https://docs.microsoft.com/en-us/sql/ssms/sql-server-management-studio-ssms?view=sql-server-ver15), and then restart the app.
+
+3. **See 401 Unauthorized error after logging in**:
+    * Check if the user level of the user account you logged in matches the listed roles of the  **section 2.1 Login** of [UserGuide.pdf](UserGuide.pdf).
+    * If the user level of your user account is `Application Admins`, ensure that your user email is specified in the `AdminEmails` of the [App Settings Variables](#app-settings-variables).
+ 
+## License
+
+This application is licensed under Apache 2.0. For details, please see [LICENSE.md](./LICENSE.md).
+
+## Written By
+
+* Daniel Clayson, Global Consulting Delivery Team, Autodesk
+* Reviewed and maintained by Eason Kang [in/eason-kang-b4398492](https://www.linkedin.com/in/eason-kang-b4398492), [Developer Advocacy and Support Team](http://aps.autodesk.com)
