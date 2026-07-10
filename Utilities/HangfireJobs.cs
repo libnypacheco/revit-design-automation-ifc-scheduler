@@ -19,6 +19,7 @@
 using System;
 using System.Threading.Tasks;
 using Hangfire;
+using Newtonsoft.Json;
 using Serilog;
 using RevitToIfcScheduler.Models;
 
@@ -55,6 +56,15 @@ namespace RevitToIfcScheduler.Utilities
                 if (!string.IsNullOrWhiteSpace(reportUrl))
                 {
                     conversionJob.WorkItemReportUrl = reportUrl;
+                }
+
+                // On terminal states, keep the Design Automation timing stats
+                // (queued/download/instructions/upload timestamps, bytes moved)
+                // in the job log for throughput and cost analysis.
+                var stats = workItem["stats"];
+                if (status != "pending" && status != "inprogress" && stats != null)
+                {
+                    conversionJob.AddLog($"WorkItem stats: {stats.ToString(Formatting.None)}");
                 }
 
                 switch (status)
