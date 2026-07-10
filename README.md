@@ -36,7 +36,7 @@ The [IFC file format](https://technical.buildingsmart.org/standards/ifc/) is a c
 The Model Derivative IFC export only accepts the *name* of an IFC export setup that must already be saved inside each published Revit model. Running the export through Design Automation for Revit removes that limitation:
 
 * **Upload your export setup JSON directly.** An IFC Settings Set can now carry the JSON exported from Revit's IFC Export dialog (`Modify Setup… > Save selected setup`). Nothing needs to be saved inside the Revit models.
-* **Export from a specific 3D view.** A settings set can specify a view UniqueId and/or the "only export elements visible in view" toggle — even if the saved setup didn't have it enabled.
+* **Export from a specific 3D view.** A settings set can specify a view UniqueId together with the "only export elements visible in view" toggle — even if the saved setup didn't have it enabled. See [Exporting from a specific 3D view](#exporting-from-a-specific-3d-view).
 * **User-defined property sets in the cloud.** Upload the Pset definition `.txt` alongside the setup; the exporter uses it instead of the (unreachable) file path baked into the setup.
 * **Predictable exporter version.** You choose the Revit engine (2021–2026) that runs the export, instead of whatever the Model Derivative service uses.
 
@@ -52,7 +52,7 @@ The rest of the application — ACC/BIM360 browsing, scheduling (Hangfire + cron
 * This application will only work on Revit files that are uploaded directly to ACC/BIM360 Docs / Autodesk Docs, or published models from cloud worksharing.
 * The Design Automation engine version must be greater than or equal to the Revit version of the converted files (older files are upgraded in-session when opened). Files from a Revit version newer than the configured engine will fail.
 * Prebuilt appbundle ZIPs exist for Revit engines 2021–2024 and 2026. For other engines, build the appbundle from [source](https://github.com/ADN-DevTech/aps-revit-ifc-exporter-appbundle) and point `DesignAutomation:AppBundleZipPath` at the ZIP.
-* View UniqueIds are model-specific, so the "3D View UniqueId" option of a settings set is only meaningful for settings sets dedicated to a single model.
+* View UniqueIds are model-specific, so the "3D View UniqueId" option of a settings set is only meaningful for settings sets dedicated to a single model. The view id also has no effect on its own — it must be combined with the "only export elements visible in the view" toggle (see [Exporting from a specific 3D view](#exporting-from-a-specific-3d-view)).
 
 
 ## Setup
@@ -176,7 +176,21 @@ Please see the [User Guide.pdf](./UserGuide.pdf) for additional details.
 5. In the `Design Automation` section, press `Provision Design Automation`. This uploads the RevitIfcExporter appbundle and creates the activity under your APS application (one-time step; repeat after changing the engine).
 6. Add an IFC Settings Set using the `Add IFC Settings Set Name` button. A settings set can be either:
    * **A name only** — the name of an IFC export setup saved inside your Revit models, or one of Revit's built-in setups (see [Further Reading](#further-reading)); or
-   * **An uploaded setup JSON** — exported from Revit's IFC Export dialog (`Modify Setup… > Save selected setup`). Optionally add a user-defined property sets `.txt`, a 3D view UniqueId, and/or the "only export elements visible in the view" toggle.
+   * **An uploaded setup JSON** — exported from Revit's IFC Export dialog (`Modify Setup… > Save selected setup`). Optionally add a user-defined property sets `.txt`, a 3D view UniqueId, and/or the "only export elements visible in the view" toggle (see [Exporting from a specific 3D view](#exporting-from-a-specific-3d-view)).
+
+#### Exporting from a specific 3D view
+
+A settings set can restrict the export to what is visible in a single 3D view. Two fields must be set **together** — the view id alone does nothing:
+
+1. **3D View UniqueId** — the view's `UniqueId` property, e.g. `82b0f1be-06bb-42c4-ac01-ebedca50e001-0010eb36`. This is *not* the integer ElementId shown by Revit's `Manage > IDs of Selection`; retrieve the UniqueId by snooping the view with [RevitLookup](https://github.com/lookup-foundation/RevitLookup), or via Dynamo/pyRevit. UniqueIds are model-specific: the id must come from the very model being converted, and the view must exist in the ACC/BIM360 copy (synced, not just local).
+2. **"Only export elements visible in the view"** — must be checked, unless the uploaded setup JSON already contains `"VisibleElementsOfCurrentView": true`. Without it, Revit's IFC exporter ignores the view id entirely and exports the whole model.
+
+When both are set, the export honors the view's visibility state, including elements manually hidden with Hide in View.
+
+If the whole model is still exported, the run has most likely degraded silently rather than failed:
+
+* Open the job in `Conversion History` and check the `WorkItem params:` log line — it shows the exact `viewId` and `onlyExportVisibleElementsInView` values sent to Design Automation.
+* Open the workitem report (its URL is stored on the job) and search for `No view found`. The appbundle logs this warning when the UniqueId does not resolve to a view in the opened model, disables view filtering, and the workitem still reports success.
 
 #### Creating a one-off conversion to IFC
 
