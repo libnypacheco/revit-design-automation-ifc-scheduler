@@ -202,14 +202,20 @@ namespace RevitToIfcScheduler.Utilities
             var formData = (JObject)bundle["uploadParameters"]["formData"];
 
             // S3 policy upload: form fields first, file field last.
-            await endpointUrl.PostMultipartAsync(mp =>
+            // The file must be added as a seekable stream, not by path: Flurl's path-based
+            // AddFile reports an unknown content length, which makes HttpClient fall back to
+            // Transfer-Encoding: chunked, and S3 rejects chunked form POSTs with 411.
+            await using (var zipStream = System.IO.File.OpenRead(zipPath))
             {
-                foreach (var field in formData.Properties())
+                await endpointUrl.PostMultipartAsync(mp =>
                 {
-                    mp.AddString(field.Name, field.Value.ToString());
-                }
-                mp.AddFile("file", zipPath);
-            });
+                    foreach (var field in formData.Properties())
+                    {
+                        mp.AddString(field.Name, field.Value.ToString());
+                    }
+                    mp.AddFile("file", zipStream, Path.GetFileName(zipPath));
+                });
+            }
 
             await CreateOrUpdateAliasAsync($"{DaBaseUrl}/appbundles/{AppBundleName}", version, token);
 
