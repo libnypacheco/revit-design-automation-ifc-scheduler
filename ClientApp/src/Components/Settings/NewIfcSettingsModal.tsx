@@ -111,13 +111,13 @@ export const NewIfcSettingsModal = observer(({show, setShow}: INewIfcSettingsMod
                         <TextField
                             value={viewId}
                             onChange={(e, value)=>setViewId(value || "")}
-                            description={"3D View UniqueId (optional; view ids are model-specific)"}
+                            description={"3D View UniqueId (optional; view ids are model-specific; only takes effect with the checkbox below)"}
                         />
                     </div>
 
                     <div style={{marginTop: 12}}>
                         <Checkbox
-                            label={"Only export elements visible in the view"}
+                            label={"Only export elements visible in the view (required for the view id to take effect)"}
                             checked={onlyVisible}
                             onChange={(e, checked)=>setOnlyVisible(!!checked)}
                         />
