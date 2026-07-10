@@ -35,17 +35,21 @@ To set up the Revit to IFC Scheduler, the following steps must be completed:
 A APS App is required to access Autodesk APS APIs and services. To learn more, see [Getting Started with APS](https://aps.autodesk.com/developer/start-now/signup).
 
 1. Create a APS Account at https://aps.autodesk.com/, or log in to your account.
-2. Create a new APS App at https://aps.autodesk.com/myapps/create, with the following APIs:
+2. Create a new APS App at https://aps.autodesk.com/myapps/create, choosing the **Traditional Web App** app type (this app is a confidential client: it stores `ClientSecret` server-side and does a redirect-based, 3-legged OAuth flow), with the following APIs:
    1. BIM 360 API
    2. Data Management API
    3. Model Derivative API
    4. Webhooks API
 3. Set the callback URL to `https://localhost:3000/api/aps/oauth/callback` for local deployments, or replace `localhost:3000` with the deployment URL for cloud deployments.
+
+    **Note.** This app builds the redirect URI dynamically from whatever host/port you actually browse to, plus the fixed path `/api/aps/oauth/callback` (see `TokenManager.GetRedirectUrl`). The value you register here must match that **exactly** — scheme, host, port, and path all count, with no trailing slash. A mismatch (e.g. registering `http://localhost:8080/` while running the app on `https://localhost:3000`) doesn't surface as a friendly error from this app — it makes Autodesk's login page itself reject the request with a generic `https://signin.autodesk.com/request-error` page, before you ever see a login form. If you hit that page, this is the first thing to check.
 4. Add the APS App to the desired BIM 360 account by following [these steps](https://aps.autodesk.com/en/docs/bim360/v1/tutorials/getting-started/get-access-to-account/#step-2-connect-your-app-to-a-specific-bim-360-account).
 
     **Note.** [Model Derivate API](https://aps.autodesk.com/en/docs/model-derivative/v2/developers_guide/overview/) incurs cost. To view the current cost of the Model Derivative service, and to purchase Cloud Credits for file conversions, please view the [APS Pricing page](https://aps.autodesk.com/pricing#cloud-credits).
 
 ###### Add APS App to ACC/BIM360 Tenants
+
+**Note.** This step must be performed by an Account Admin of the ACC/BIM360 tenant, who is often not the person deploying this tool. A self-contained guide that can be sent to that admin as-is (requiring only the app's Client ID and a display name) is available at [ACCOUNT-ADMIN-GUIDE.md](ACCOUNT-ADMIN-GUIDE.md). Until this step is completed, the Accounts list in the tool's Settings page will be empty.
 
 1. Navigate to https://admin.b360.autodesk.com/ (Must be an Account Admin)
 2. Navigate to the Account Admin page for your target ACC/BIM360 Tenant
