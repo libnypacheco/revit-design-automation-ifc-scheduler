@@ -17,7 +17,8 @@ html, body, #root{
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #294db8;
+    /* brand teal — decorative fill, carries no text */
+    background: #389BAA;
     animation: lds-grid 1.2s linear infinite;
 }
 .lds-grid div:nth-child(1) {

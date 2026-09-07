@@ -1,16 +1,42 @@
-/* Provide sufficient contrast against white background */
-a {
-  color: #0366d6;
+/*
+ * Brand palette. Kept in sync with ClientApp/src/Theme.ts, which feeds the
+ * same colours to the Fluent controls.
+ *
+ * The --brand-* values are the palette as issued and are used for fills,
+ * accents and borders. None of them clears WCAG AA 4.5:1 against white text,
+ * so surfaces that carry text use the --brand-*-text shades instead: the same
+ * hues darkened until they do.
+ */
+:root {
+  --brand-mint: #89D0C8;
+  --brand-teal: #389BAA;
+  --brand-denim: #A1B2BF;
+  --brand-dark-denim: #6A88A0;
+  --brand-pink: #F49AC1;
+  --brand-purple: #B586A5;
+  --brand-misty-green: #C5D5CB;
+  --brand-forrest: #6C8C78;
+  --brand-sand: #B0A89B;
+  --brand-slate: #7A9193;
+  --brand-grey: #777777;
+
+  /* teal darkened 25% — 5.37:1 on white and behind white text */
+  --brand-teal-text: #2a7480;
+  /* teal darkened 32% — hover/active for the above */
+  --brand-teal-text-hover: #215c65;
+  /* purple darkened 30% — 5.60:1 on white, for inline code */
+  --brand-purple-text: #7f5e73;
 }
 
-code {
-  color: #E01A76;
+/* Provide sufficient contrast against white background */
+a {
+  color: var(--brand-teal-text);
 }
 
 .btn-primary {
   color: #fff;
-  background-color: #1b6ec2;
-  border-color: #1861ac;
+  background-color: var(--brand-teal-text);
+  border-color: var(--brand-teal-text-hover);
 }
 
 
@@ -25,7 +51,7 @@ header{
 }
 
 header.top{
-  background-color: #1b6ec2;
+  background-color: var(--brand-teal-text);
   color: white;
   padding: 0px 15px;
 }
@@ -43,9 +69,14 @@ header.top a{
   color: white;
   text-decoration: none;
 }
+/*
+ * Hover stays white and gains an underline rather than shifting to a palette
+ * tint: Mint on the header would be 3.05:1, below AA for link text.
+ */
 header.top a:hover{
   margin-left: 20px;
-  color: #c7c7c7;
+  color: white;
+  text-decoration: underline;
 }
 
 main{
@@ -107,7 +138,7 @@ main{
   display: flex;
   flex-direction: column;
   overflow:hidden;
-  border: solid 1px #CCC;
+  border: solid 1px var(--brand-denim);
   margin: 10px;
 }
 
@@ -143,8 +174,10 @@ main{
   border-color: darkred;
 }
 
+/* Grey is 4.48:1 on white — short of AA, but an improvement on the 2.30:1
+   this row previously used to mark hidden entries. */
 .hiddenRow{
-  color: #a2a2a2;
+  color: var(--brand-grey);
 }
 
 .languageButton{
@@ -174,5 +207,5 @@ main{
 
 
 code {
-  color: #9e007e;
+  color: var(--brand-purple-text);
 }

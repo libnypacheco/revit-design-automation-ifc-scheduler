@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {DetailsList, DetailsRow, IColumn, SelectionMode} from "office-ui-fabric-react";
 import {observer} from "mobx-react-lite";
+import {brand} from "../Theme";
 
 interface ISortedTable {
   items: any[];
@@ -90,7 +91,7 @@ export const SortedTable = observer(({items, onItemInvoked, columns, onRenderRow
           onItemInvoked={onItemInvoked}
           onRenderRow={onRenderRow ? onRenderRow : (props)=>{
             //@ts-ignore
-            return <DetailsRow {...props} onClick={()=>onItemInvoked(props?.item)} styles={{cell: {cursor: 'pointer', backgroundColor: selectedRowId === props?.item.id ? '#cbd3fc': 'white'}}}/>}}
+            return <DetailsRow {...props} onClick={()=>onItemInvoked(props?.item)} styles={{cell: {cursor: 'pointer', backgroundColor: selectedRowId === props?.item.id ? brand.mint : 'white'}}}/>}}
           columns={filtered}
       />
   );
