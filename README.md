@@ -361,5 +361,13 @@ This application is licensed under Apache 2.0. For details, please see [LICENSE.
 
 ## Written By
 
+**Original application** ([aps-revit.ifc.scheduler](https://github.com/autodesk-platform-services/aps-revit.ifc.scheduler)):
+
 * Daniel Clayson, Global Consulting Delivery Team, Autodesk
 * Reviewed and maintained by Eason Kang [in/eason-kang-b4398492](https://www.linkedin.com/in/eason-kang-b4398492), [Developer Advocacy and Support Team](http://aps.autodesk.com)
+
+**Design Automation edition** (this fork):
+
+* Libny Pacheco — replaced the Model Derivative conversion path with Design Automation for Revit, added uploadable IFC export setups (setup JSON, Pset definitions, 3D view targeting, selectable Revit engine), appbundle/activity provisioning, and the APS setup and deployment guides.
+
+This fork is not affiliated with, endorsed by, or supported by Autodesk. Please report issues with this fork here rather than to Autodesk.
