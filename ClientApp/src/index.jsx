@@ -6,6 +6,11 @@ import './Utilities/i18next';
 import './custom.css'
 import {unregister} from "./registerServiceWorker";
 import {Loading} from "./Components/Loading";
+import {applyBrandTheme} from "./Theme";
+
+// Register the brand theme before the first render so Fluent controls pick it
+// up instead of falling back to the default Microsoft blue.
+applyBrandTheme();
 
 const baseUrl = document.getElementsByTagName('base')[0].getAttribute('href');
 const rootElement = document.getElementById('root');
